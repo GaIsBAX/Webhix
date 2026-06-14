@@ -8,7 +8,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
+)
+
+var (
+	defaultTelegramClient = &http.Client{Timeout: 10 * time.Second}
+	proxyClients          sync.Map
 )
 
 // telegramSend implements Provider for Telegram via ProviderFunc.
@@ -21,13 +27,22 @@ func sendMessage(ctx context.Context, botToken, chatID, text, proxyURL string) e
 		return fmt.Errorf("telegram: bot_token and chat_id are required")
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := defaultTelegramClient
 	if proxyURL != "" {
-		proxy, err := validateProxy(proxyURL)
-		if err != nil {
-			return err
+		if v, ok := proxyClients.Load(proxyURL); ok {
+			client = v.(*http.Client)
+		} else {
+			proxy, err := validateProxy(proxyURL)
+			if err != nil {
+				return err
+			}
+			c := &http.Client{
+				Timeout:   10 * time.Second,
+				Transport: &http.Transport{Proxy: http.ProxyURL(proxy)},
+			}
+			proxyClients.Store(proxyURL, c)
+			client = c
 		}
-		client.Transport = &http.Transport{Proxy: http.ProxyURL(proxy)}
 	}
 
 	// text already contains HTML from the caller (handler.go escapes user data before calling Send)
