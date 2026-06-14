@@ -174,10 +174,17 @@ func (r *Hook) UpsertNotificationChannel(ctx context.Context, hookID int64, prov
 }
 
 func (r *Hook) DeleteNotificationChannel(ctx context.Context, hookID int64, provider string) error {
-	return r.q.DeleteNotificationChannel(ctx, sqlc.DeleteNotificationChannelParams{
+	n, err := r.q.DeleteNotificationChannel(ctx, sqlc.DeleteNotificationChannelParams{
 		HookID:   hookID,
 		Provider: provider,
 	})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func toDomainChannel(row sqlc.HookNotificationChannel) domain.NotificationChannel {

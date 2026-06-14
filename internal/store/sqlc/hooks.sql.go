@@ -92,7 +92,7 @@ func (q *Queries) CreateWebhookRequest(ctx context.Context, arg CreateWebhookReq
 	return i, err
 }
 
-const deleteNotificationChannel = `-- name: DeleteNotificationChannel :exec
+const deleteNotificationChannel = `-- name: DeleteNotificationChannel :execrows
 DELETE FROM hook_notification_channels
 WHERE hook_id = ? AND provider = ?
 `
@@ -102,9 +102,12 @@ type DeleteNotificationChannelParams struct {
 	Provider string `json:"provider"`
 }
 
-func (q *Queries) DeleteNotificationChannel(ctx context.Context, arg DeleteNotificationChannelParams) error {
-	_, err := q.db.ExecContext(ctx, deleteNotificationChannel, arg.HookID, arg.Provider)
-	return err
+func (q *Queries) DeleteNotificationChannel(ctx context.Context, arg DeleteNotificationChannelParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteNotificationChannel, arg.HookID, arg.Provider)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const deleteWebhookRequestsOlderThan = `-- name: DeleteWebhookRequestsOlderThan :execresult
@@ -197,7 +200,8 @@ func (q *Queries) GetNotificationChannel(ctx context.Context, arg GetNotificatio
 const listHooks = `-- name: ListHooks :many
 SELECT id, token, name, created_at, updated_at
 FROM hooks
-ORDER BY created_at DESC`
+ORDER BY created_at DESC
+`
 
 func (q *Queries) ListHooks(ctx context.Context) ([]Hook, error) {
 	rows, err := q.db.QueryContext(ctx, listHooks)

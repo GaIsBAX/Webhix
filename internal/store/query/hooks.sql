@@ -96,6 +96,6 @@ ON CONFLICT (hook_id, provider) DO UPDATE SET
     updated_at = CURRENT_TIMESTAMP
 RETURNING id, hook_id, provider, config, enabled, created_at, updated_at;
 
--- name: DeleteNotificationChannel :exec
+-- name: DeleteNotificationChannel :execrows
 DELETE FROM hook_notification_channels
 WHERE hook_id = ? AND provider = ?;
