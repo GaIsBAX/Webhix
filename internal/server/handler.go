@@ -409,6 +409,11 @@ func (h *Hook) SetNotification(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err := notify.ValidateConfig(provider, notify.Config(contract.Config)); err != nil {
+		SendError(w, http.StatusBadRequest, WithDetails(ErrBadRequest, ErrorDetailContract{Message: err.Error()}))
+		return
+	}
+
 	ch, err := h.deps.Service.UpsertChannel(r.Context(), token, provider, contract.Config)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
