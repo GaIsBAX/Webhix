@@ -30,7 +30,9 @@ func sendMessage(ctx context.Context, botToken, chatID, text, proxyURL string) e
 	client := defaultTelegramClient
 	if proxyURL != "" {
 		if v, ok := proxyClients.Load(proxyURL); ok {
-			client = v.(*http.Client)
+			if c, ok := v.(*http.Client); ok {
+				client = c
+			}
 		} else {
 			proxy, err := validateProxy(proxyURL)
 			if err != nil {
