@@ -1,6 +1,4 @@
 -- +goose Up
-DROP TABLE IF EXISTS hook_notifications;
-
 CREATE TABLE hook_notification_channels (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     hook_id INTEGER NOT NULL,
