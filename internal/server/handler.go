@@ -367,7 +367,7 @@ func (h *Hook) GetNotification(w http.ResponseWriter, r *http.Request) {
 
 	contracts := make([]NotificationContract, len(channels))
 	for i, ch := range channels {
-		contracts[i] = NotificationContract{Provider: ch.Provider, Config: ch.Config}
+		contracts[i] = toNotificationContract(ch, notify.SecretKeys(ch.Provider))
 	}
 
 	data, err := json.Marshal(contracts)
@@ -393,6 +393,22 @@ func (h *Hook) SetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if secrets := notify.SecretKeys(provider); len(secrets) > 0 {
+		if existing, err := h.deps.Service.ListChannels(r.Context(), token); err == nil {
+			for _, exc := range existing {
+				if exc.Provider != provider {
+					continue
+				}
+				for _, key := range secrets {
+					if contract.Config[key] == "" && exc.Config[key] != "" {
+						contract.Config[key] = exc.Config[key]
+					}
+				}
+				break
+			}
+		}
+	}
+
 	ch, err := h.deps.Service.UpsertChannel(r.Context(), token, provider, contract.Config)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
@@ -404,7 +420,7 @@ func (h *Hook) SetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := json.Marshal(NotificationContract{Provider: ch.Provider, Config: ch.Config})
+	data, err := json.Marshal(toNotificationContract(ch, notify.SecretKeys(ch.Provider)))
 	if err != nil {
 		SendError(w, http.StatusInternalServerError, ErrInternal)
 		return

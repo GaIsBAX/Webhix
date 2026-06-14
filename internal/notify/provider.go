@@ -24,6 +24,10 @@ var (
 	registry   = map[string]Provider{
 		"telegram": ProviderFunc(telegramSend),
 	}
+
+	secretKeys = map[string][]string{
+		"telegram": {"bot_token"},
+	}
 )
 
 func Send(ctx context.Context, provider string, config Config, message string) error {
@@ -37,6 +41,10 @@ func Send(ctx context.Context, provider string, config Config, message string) e
 	}
 
 	return p.Send(ctx, config, message)
+}
+
+func SecretKeys(provider string) []string {
+	return secretKeys[provider]
 }
 
 func KnownProviders() []string {
