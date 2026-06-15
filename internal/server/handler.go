@@ -14,7 +14,10 @@ import (
 	"github.com/GaIsBAX/Webhix/internal/notify"
 )
 
-const DefaultMaxBodySize int64 = 5 << 20 // 5MB
+const (
+	DefaultMaxBodySize         int64 = 5 << 20 // 5MB
+	maxConcurrentNotifications       = 64
+)
 
 type HookService interface {
 	ListHooks(ctx context.Context) ([]domain.Hook, error)
@@ -49,7 +52,8 @@ type HookDeps struct {
 }
 
 type Hook struct {
-	deps *HookDeps
+	deps      *HookDeps
+	notifySem chan struct{}
 }
 
 func NewHook(deps *HookDeps) *Hook {
@@ -57,7 +61,7 @@ func NewHook(deps *HookDeps) *Hook {
 		deps.Opts.MaxBodySize = DefaultMaxBodySize
 	}
 
-	return &Hook{deps: deps}
+	return &Hook{deps: deps, notifySem: make(chan struct{}, maxConcurrentNotifications)}
 }
 
 func (h *Hook) RegisterRoutes() {
@@ -198,7 +202,15 @@ func (h *Hook) ReceiveWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.deps.Hub.Publish(token, data)
-	go h.sendNotifications(req, token, context.WithoutCancel(r.Context()))
+	go func() {
+		select {
+		case h.notifySem <- struct{}{}:
+			defer func() { <-h.notifySem }()
+			h.sendNotifications(req, token, context.WithoutCancel(r.Context()))
+		default:
+			slog.Warn("notification queue full, dropping", "token", token)
+		}
+	}()
 
 	if customResp.StatusCode > 0 {
 		for k, v := range customResp.Headers {
