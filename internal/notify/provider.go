@@ -11,26 +11,14 @@ type Config map[string]string
 
 type Provider interface {
 	Send(ctx context.Context, config Config, message string) error
-}
-
-type ProviderFunc func(ctx context.Context, config Config, message string) error
-
-func (f ProviderFunc) Send(ctx context.Context, config Config, message string) error {
-	return f(ctx, config, message)
+	ValidateConfig(config Config) error
+	SecretKeys() []string
 }
 
 var (
 	registryMu sync.RWMutex
 	registry   = map[string]Provider{
-		"telegram": ProviderFunc(telegramSend),
-	}
-
-	secretKeys = map[string][]string{
-		"telegram": {"bot_token"},
-	}
-
-	requiredKeys = map[string][]string{
-		"telegram": {"bot_token", "chat_id"},
+		"telegram": telegramProvider{},
 	}
 )
 
@@ -49,22 +37,26 @@ func Send(ctx context.Context, provider string, config Config, message string) e
 
 func ValidateConfig(provider string, config Config) error {
 	registryMu.RLock()
-	_, ok := registry[provider]
+	p, ok := registry[provider]
 	registryMu.RUnlock()
 
 	if !ok {
 		return fmt.Errorf("unknown provider %q", provider)
 	}
-	for _, k := range requiredKeys[provider] {
-		if config[k] == "" {
-			return fmt.Errorf("%s: %q is required", provider, k)
-		}
-	}
-	return nil
+
+	return p.ValidateConfig(config)
 }
 
 func SecretKeys(provider string) []string {
-	return secretKeys[provider]
+	registryMu.RLock()
+	p, ok := registry[provider]
+	registryMu.RUnlock()
+
+	if !ok {
+		return nil
+	}
+
+	return p.SecretKeys()
 }
 
 func KnownProviders() []string {

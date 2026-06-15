@@ -17,9 +17,23 @@ var (
 	proxyClients          sync.Map
 )
 
-// telegramSend implements Provider for Telegram via ProviderFunc.
-func telegramSend(ctx context.Context, config Config, message string) error {
+type telegramProvider struct{}
+
+func (telegramProvider) Send(ctx context.Context, config Config, message string) error {
 	return sendMessage(ctx, config["bot_token"], config["chat_id"], message, config["proxy_url"])
+}
+
+func (telegramProvider) ValidateConfig(config Config) error {
+	for _, k := range []string{"bot_token", "chat_id"} {
+		if config[k] == "" {
+			return fmt.Errorf("telegram: %q is required", k)
+		}
+	}
+	return nil
+}
+
+func (telegramProvider) SecretKeys() []string {
+	return []string{"bot_token"}
 }
 
 func sendMessage(ctx context.Context, botToken, chatID, text, proxyURL string) error {
