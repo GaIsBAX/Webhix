@@ -10,4 +10,3 @@ func DefaultOptions() Options {
 		Server: "http://localhost:8080",
 	}
 }
-
