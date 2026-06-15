@@ -2,26 +2,32 @@ package telegram
 
 import (
 	"context"
-	"net/http"
 	"net/url"
 
+	"github.com/GaIsBAX/Webhix/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(ctx context.Context, server, authToken *string) *cobra.Command {
+type Options struct {
+	BotToken string
+	ChatID   string
+	ProxyURL string
+}
+
+func NewCommand(ctx context.Context, client *apiclient.Client) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "telegram",
 		Short: "Manage Telegram notifications",
 	}
 
-	cmd.AddCommand(newSetCmd(ctx, server, authToken))
-	cmd.AddCommand(newTestCmd(ctx, server, authToken))
-	cmd.AddCommand(newRemoveCmd(ctx, server, authToken))
+	cmd.AddCommand(newSetCmd(ctx, client))
+	cmd.AddCommand(newTestCmd(ctx, client))
+	cmd.AddCommand(newRemoveCmd(ctx, client))
 
 	return cmd
 }
 
-func newSetCmd(ctx context.Context, server, authToken *string) *cobra.Command {
+func newSetCmd(ctx context.Context, client *apiclient.Client) *cobra.Command {
 	opts := Options{}
 
 	cmd := &cobra.Command{
@@ -35,8 +41,8 @@ func newSetCmd(ctx context.Context, server, authToken *string) *cobra.Command {
 			}
 
 			body := map[string]any{"provider": "telegram", "config": cfg}
-			path := *server + "/api/endpoints/" + url.PathEscape(args[0]) + "/notifications/telegram"
-			if err := do(ctx, http.MethodPut, path, *authToken, body); err != nil {
+			path := "/api/endpoints/" + url.PathEscape(args[0]) + "/notifications/telegram"
+			if err := client.Put(ctx, path, body); err != nil {
 				return err
 			}
 
@@ -52,14 +58,14 @@ func newSetCmd(ctx context.Context, server, authToken *string) *cobra.Command {
 	return cmd
 }
 
-func newTestCmd(ctx context.Context, server, authToken *string) *cobra.Command {
+func newTestCmd(ctx context.Context, client *apiclient.Client) *cobra.Command {
 	return &cobra.Command{
 		Use:   "test <token>",
 		Short: "Send a test Telegram message",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path := *server + "/api/endpoints/" + url.PathEscape(args[0]) + "/notifications/telegram/test"
-			if err := do(ctx, http.MethodPost, path, *authToken, nil); err != nil {
+			path := "/api/endpoints/" + url.PathEscape(args[0]) + "/notifications/telegram/test"
+			if err := client.Post(ctx, path, nil); err != nil {
 				return err
 			}
 
@@ -69,14 +75,14 @@ func newTestCmd(ctx context.Context, server, authToken *string) *cobra.Command {
 	}
 }
 
-func newRemoveCmd(ctx context.Context, server, authToken *string) *cobra.Command {
+func newRemoveCmd(ctx context.Context, client *apiclient.Client) *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove <token>",
 		Short: "Remove Telegram notifications from an endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path := *server + "/api/endpoints/" + url.PathEscape(args[0]) + "/notifications/telegram"
-			if err := do(ctx, http.MethodDelete, path, *authToken, nil); err != nil {
+			path := "/api/endpoints/" + url.PathEscape(args[0]) + "/notifications/telegram"
+			if err := client.Delete(ctx, path); err != nil {
 				return err
 			}
 
