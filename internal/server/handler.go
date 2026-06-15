@@ -405,6 +405,10 @@ func (h *Hook) SetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if contract.Config == nil {
+		contract.Config = make(map[string]string)
+	}
+
 	if secrets := notify.SecretKeys(provider); len(secrets) > 0 {
 		if existing, err := h.deps.Service.ListChannels(r.Context(), token); err == nil {
 			for _, exc := range existing {
