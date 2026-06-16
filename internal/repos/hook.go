@@ -21,10 +21,10 @@ func NewHook(db sqlc.DBTX) *Hook {
 	}
 }
 
-func (r *Hook) CreateHook(ctx context.Context, token string) (domain.Hook, error) {
+func (r *Hook) CreateHook(ctx context.Context, token, name string) (domain.Hook, error) {
 	hook, err := r.q.CreateHook(ctx, sqlc.CreateHookParams{
 		Token: token,
-		Name:  sql.NullString{},
+		Name:  sql.NullString{String: name, Valid: name != ""},
 	})
 	if err != nil {
 		return domain.Hook{}, err

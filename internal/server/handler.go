@@ -21,7 +21,7 @@ const (
 
 type HookService interface {
 	ListHooks(ctx context.Context) ([]domain.Hook, error)
-	CreateHook(ctx context.Context, token string) (domain.Hook, error)
+	CreateHook(ctx context.Context, name string) (domain.Hook, error)
 	ReceiveWebhook(ctx context.Context, token string, params domain.CreateWebhookRequestParams) (domain.WebhookRequest, domain.HookResponse, error)
 	ListWebhookRequests(ctx context.Context, token string) ([]domain.WebhookRequest, error)
 	GetHookResponse(ctx context.Context, token string) (domain.HookResponse, error)

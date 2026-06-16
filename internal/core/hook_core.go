@@ -12,7 +12,7 @@ const defaultHookResponseStatusCode int64 = 200
 type TokenGenerator func() string
 
 type HookRepository interface {
-	CreateHook(ctx context.Context, token string) (domain.Hook, error)
+	CreateHook(ctx context.Context, token, name string) (domain.Hook, error)
 	GetHookByToken(ctx context.Context, token string) (domain.Hook, error)
 	ListHooks(ctx context.Context) ([]domain.Hook, error)
 	CreateWebhookRequest(ctx context.Context, params domain.CreateWebhookRequestParams) (domain.WebhookRequest, error)
@@ -20,7 +20,6 @@ type HookRepository interface {
 	GetHookResponse(ctx context.Context, hookID int64) (domain.HookResponse, error)
 	UpsertHookResponse(ctx context.Context, hookID int64, params domain.UpsertHookResponseParams) (domain.HookResponse, error)
 	ListNotificationChannels(ctx context.Context, hookID int64) ([]domain.NotificationChannel, error)
-	GetNotificationChannel(ctx context.Context, hookID int64, provider string) (domain.NotificationChannel, error)
 	UpsertNotificationChannel(ctx context.Context, hookID int64, provider string, config map[string]string) (domain.NotificationChannel, error)
 	DeleteNotificationChannel(ctx context.Context, hookID int64, provider string) error
 }
@@ -45,12 +44,8 @@ func (s *Hook) ListHooks(ctx context.Context) ([]domain.Hook, error) {
 	return s.repo.ListHooks(ctx)
 }
 
-func (s *Hook) CreateHook(ctx context.Context, token string) (domain.Hook, error) {
-	if token == "" {
-		token = s.generateToken()
-	}
-
-	return s.repo.CreateHook(ctx, token)
+func (s *Hook) CreateHook(ctx context.Context, name string) (domain.Hook, error) {
+	return s.repo.CreateHook(ctx, s.generateToken(), name)
 }
 
 func (s *Hook) ReceiveWebhook(ctx context.Context, token string, params domain.CreateWebhookRequestParams) (domain.WebhookRequest, domain.HookResponse, error) {
