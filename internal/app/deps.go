@@ -10,6 +10,7 @@ import (
 	"github.com/GaIsBAX/Webhix/internal/config"
 	"github.com/GaIsBAX/Webhix/internal/core"
 	"github.com/GaIsBAX/Webhix/internal/hub"
+	"github.com/GaIsBAX/Webhix/internal/notify"
 	"github.com/GaIsBAX/Webhix/internal/repos"
 	"github.com/GaIsBAX/Webhix/internal/server"
 	"github.com/GaIsBAX/Webhix/internal/store"
@@ -132,9 +133,12 @@ type handlers struct {
 func newHandlers(deps *dependencies) *handlers {
 	return &handlers{
 		hook: server.NewHook(&server.HookDeps{
-			Mux:           deps.mux,
-			Service:       deps.services.hook,
+			Mux:     deps.mux,
+			Service: deps.services.hook,
 			Notifications: deps.services.hook,
+			Registry: notify.NewRegistry(map[string]notify.Provider{
+				"telegram": notify.NewTelegramProvider(),
+			}),
 			Hub:           deps.infra.hub,
 			Opts: server.HookOptions{
 				BaseURL:     deps.cfg.BaseURL,

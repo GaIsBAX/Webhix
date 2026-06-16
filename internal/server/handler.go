@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/GaIsBAX/Webhix/internal/domain"
-	"github.com/GaIsBAX/Webhix/internal/notify"
 )
 
 const (
@@ -42,6 +41,12 @@ type EventBroker interface {
 	Publish(token string, data []byte)
 }
 
+type NotificationRegistry interface {
+	Send(ctx context.Context, provider string, config map[string]string, message string) error
+	ValidateConfig(provider string, config map[string]string) error
+	SecretKeys(provider string) []string
+}
+
 type HookOptions struct {
 	BaseURL     string
 	MaxBodySize int64
@@ -52,6 +57,7 @@ type HookDeps struct {
 	Mux           *http.ServeMux
 	Service       HookService
 	Notifications NotificationService
+	Registry      NotificationRegistry
 	Hub           EventBroker
 	Opts          HookOptions
 }
@@ -384,7 +390,7 @@ func (h *Hook) GetNotification(w http.ResponseWriter, r *http.Request) {
 
 	contracts := make([]NotificationContract, len(channels))
 	for i, ch := range channels {
-		contracts[i] = toNotificationContract(ch, notify.SecretKeys(ch.Provider))
+		contracts[i] = toNotificationContract(ch, h.deps.Registry.SecretKeys(ch.Provider))
 	}
 
 	data, err := json.Marshal(contracts)
@@ -414,7 +420,7 @@ func (h *Hook) SetNotification(w http.ResponseWriter, r *http.Request) {
 		contract.Config = make(map[string]string)
 	}
 
-	if secrets := notify.SecretKeys(provider); len(secrets) > 0 {
+	if secrets := h.deps.Registry.SecretKeys(provider); len(secrets) > 0 {
 		if existing, err := h.deps.Notifications.ListChannels(r.Context(), token); err == nil {
 			for _, exc := range existing {
 				if exc.Provider != provider {
@@ -430,7 +436,7 @@ func (h *Hook) SetNotification(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := notify.ValidateConfig(provider, notify.Config(contract.Config)); err != nil {
+	if err := h.deps.Registry.ValidateConfig(provider, contract.Config); err != nil {
 		SendError(w, http.StatusBadRequest, WithDetails(ErrBadRequest, ErrorDetailContract{Message: err.Error()}))
 		return
 	}
@@ -446,7 +452,7 @@ func (h *Hook) SetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := json.Marshal(toNotificationContract(ch, notify.SecretKeys(ch.Provider)))
+	data, err := json.Marshal(toNotificationContract(ch, h.deps.Registry.SecretKeys(ch.Provider)))
 	if err != nil {
 		SendError(w, http.StatusInternalServerError, ErrInternal)
 		return
@@ -496,7 +502,7 @@ func (h *Hook) TestNotification(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		msg := fmt.Sprintf("✅ Webhix test notification for endpoint <code>/r/%s</code>", html.EscapeString(token))
-		if err := notify.Send(r.Context(), ch.Provider, notify.Config(ch.Config), msg); err != nil {
+		if err := h.deps.Registry.Send(r.Context(), ch.Provider, ch.Config, msg); err != nil {
 			slog.Error("test notification", "provider", provider, "err", err)
 			SendError(w, http.StatusBadGateway, WithDetails(ErrInternal, ErrorDetailContract{
 				Field:   provider,
@@ -533,7 +539,7 @@ func (h *Hook) sendNotifications(req domain.WebhookRequest, token string, ctx co
 		wg.Add(1)
 		go func(ch domain.NotificationChannel) {
 			defer wg.Done()
-			if err := notify.Send(ctx, ch.Provider, notify.Config(ch.Config), msg); err != nil {
+			if err := h.deps.Registry.Send(ctx, ch.Provider, ch.Config, msg); err != nil {
 				slog.Warn("notification failed", "provider", ch.Provider, "token", token, "err", err)
 			}
 		}(ch)

@@ -17,6 +17,10 @@ var (
 	proxyClients          sync.Map
 )
 
+func NewTelegramProvider() Provider {
+	return telegramProvider{}
+}
+
 type telegramProvider struct{}
 
 func (telegramProvider) Send(ctx context.Context, config Config, message string) error {

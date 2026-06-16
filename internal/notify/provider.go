@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"sync"
 )
 
 type Config map[string]string
@@ -15,43 +14,34 @@ type Provider interface {
 	SecretKeys() []string
 }
 
-var (
-	registryMu sync.RWMutex
-	registry   = map[string]Provider{
-		"telegram": telegramProvider{},
-	}
-)
+type Registry struct {
+	providers map[string]Provider
+}
 
-func Send(ctx context.Context, provider string, config Config, message string) error {
-	registryMu.RLock()
+func NewRegistry(providers map[string]Provider) *Registry {
+	return &Registry{providers: providers}
+}
 
-	p, ok := registry[provider]
-	registryMu.RUnlock()
-
+func (r *Registry) Send(ctx context.Context, provider string, config map[string]string, message string) error {
+	p, ok := r.providers[provider]
 	if !ok {
 		return fmt.Errorf("unknown provider: %s", provider)
 	}
 
-	return p.Send(ctx, config, message)
+	return p.Send(ctx, Config(config), message)
 }
 
-func ValidateConfig(provider string, config Config) error {
-	registryMu.RLock()
-	p, ok := registry[provider]
-	registryMu.RUnlock()
-
+func (r *Registry) ValidateConfig(provider string, config map[string]string) error {
+	p, ok := r.providers[provider]
 	if !ok {
 		return fmt.Errorf("unknown provider %q", provider)
 	}
 
-	return p.ValidateConfig(config)
+	return p.ValidateConfig(Config(config))
 }
 
-func SecretKeys(provider string) []string {
-	registryMu.RLock()
-	p, ok := registry[provider]
-	registryMu.RUnlock()
-
+func (r *Registry) SecretKeys(provider string) []string {
+	p, ok := r.providers[provider]
 	if !ok {
 		return nil
 	}
@@ -59,15 +49,12 @@ func SecretKeys(provider string) []string {
 	return p.SecretKeys()
 }
 
-func KnownProviders() []string {
-	registryMu.RLock()
-
-	keys := make([]string, 0, len(registry))
-	for k := range registry {
+func (r *Registry) KnownProviders() []string {
+	keys := make([]string, 0, len(r.providers))
+	for k := range r.providers {
 		keys = append(keys, k)
 	}
 
-	registryMu.RUnlock()
 	sort.Strings(keys)
 	return keys
 }
