@@ -508,7 +508,6 @@ func (h *Hook) TestNotification(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
-
 func (h *Hook) readOnly(w http.ResponseWriter) bool {
 	if !h.deps.Opts.ReadOnly {
 		return false
