@@ -9,15 +9,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"sync"
 
 	"github.com/GaIsBAX/Webhix/internal/domain"
 )
 
-const (
-	DefaultMaxBodySize         int64 = 5 << 20 // 5MB
-	maxConcurrentNotifications       = 64
-)
+const DefaultMaxBodySize int64 = 5 << 20 // 5MB
 
 type HookService interface {
 	ListHooks(ctx context.Context) ([]domain.Hook, error)
@@ -26,6 +22,7 @@ type HookService interface {
 	ListWebhookRequests(ctx context.Context, token string) ([]domain.WebhookRequest, error)
 	GetHookResponse(ctx context.Context, token string) (domain.HookResponse, error)
 	SetHookResponse(ctx context.Context, token string, params domain.UpsertHookResponseParams) (domain.HookResponse, error)
+	DispatchNotifications(ctx context.Context, req domain.WebhookRequest, token string)
 }
 
 type NotificationService interface {
@@ -63,8 +60,7 @@ type HookDeps struct {
 }
 
 type Hook struct {
-	deps      *HookDeps
-	notifySem chan struct{}
+	deps *HookDeps
 }
 
 func NewHook(deps *HookDeps) *Hook {
@@ -72,7 +68,7 @@ func NewHook(deps *HookDeps) *Hook {
 		deps.Opts.MaxBodySize = DefaultMaxBodySize
 	}
 
-	return &Hook{deps: deps, notifySem: make(chan struct{}, maxConcurrentNotifications)}
+	return &Hook{deps: deps}
 }
 
 func (h *Hook) RegisterRoutes() {
@@ -213,15 +209,7 @@ func (h *Hook) ReceiveWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.deps.Hub.Publish(token, data)
-	go func() {
-		select {
-		case h.notifySem <- struct{}{}:
-			defer func() { <-h.notifySem }()
-			h.sendNotifications(req, token, context.WithoutCancel(r.Context()))
-		default:
-			slog.Warn("notification queue full, dropping", "token", token)
-		}
-	}()
+	h.deps.Service.DispatchNotifications(r.Context(), req, token)
 
 	if customResp.StatusCode > 0 {
 		for k, v := range customResp.Headers {
@@ -520,32 +508,6 @@ func (h *Hook) TestNotification(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
-func (h *Hook) sendNotifications(req domain.WebhookRequest, token string, ctx context.Context) {
-	channels, err := h.deps.Notifications.GetChannelsForHookID(ctx, req.HookID)
-	if err != nil || len(channels) == 0 {
-		return
-	}
-
-	msg := fmt.Sprintf(
-		"📨 <b>New webhook</b>\nEndpoint: <code>/r/%s</code>\nMethod: <b>%s</b>\nPath: <code>%s</code>",
-		html.EscapeString(token), html.EscapeString(req.Method), html.EscapeString(req.Path),
-	)
-
-	var wg sync.WaitGroup
-	for _, ch := range channels {
-		if !ch.Enabled {
-			continue
-		}
-		wg.Add(1)
-		go func(ch domain.NotificationChannel) {
-			defer wg.Done()
-			if err := h.deps.Registry.Send(ctx, ch.Provider, ch.Config, msg); err != nil {
-				slog.Warn("notification failed", "provider", ch.Provider, "token", token, "err", err)
-			}
-		}(ch)
-	}
-	wg.Wait()
-}
 
 func (h *Hook) readOnly(w http.ResponseWriter) bool {
 	if !h.deps.Opts.ReadOnly {

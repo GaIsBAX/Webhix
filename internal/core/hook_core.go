@@ -3,13 +3,24 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
+	"html"
+	"log/slog"
+	"sync"
 
 	"github.com/GaIsBAX/Webhix/internal/domain"
 )
 
-const defaultHookResponseStatusCode int64 = 200
+const (
+	defaultHookResponseStatusCode int64 = 200
+	maxConcurrentNotifications    int   = 64
+)
 
 type TokenGenerator func() string
+
+type NotificationSender interface {
+	Send(ctx context.Context, provider string, config map[string]string, message string) error
+}
 
 type HookRepository interface {
 	CreateHook(ctx context.Context, token, name string) (domain.Hook, error)
@@ -27,9 +38,11 @@ type HookRepository interface {
 type Hook struct {
 	repo          HookRepository
 	generateToken TokenGenerator
+	sender        NotificationSender
+	notifySem     chan struct{}
 }
 
-func NewHook(repo HookRepository, generateToken TokenGenerator) *Hook {
+func NewHook(repo HookRepository, generateToken TokenGenerator, sender NotificationSender) *Hook {
 	if generateToken == nil {
 		generateToken = func() string { return "" }
 	}
@@ -37,6 +50,8 @@ func NewHook(repo HookRepository, generateToken TokenGenerator) *Hook {
 	return &Hook{
 		repo:          repo,
 		generateToken: generateToken,
+		sender:        sender,
+		notifySem:     make(chan struct{}, maxConcurrentNotifications),
 	}
 }
 
@@ -133,6 +148,46 @@ func (s *Hook) DeleteChannel(ctx context.Context, token, provider string) error 
 
 func (s *Hook) GetChannelsForHookID(ctx context.Context, hookID int64) ([]domain.NotificationChannel, error) {
 	return s.repo.ListNotificationChannels(ctx, hookID)
+}
+
+func (s *Hook) DispatchNotifications(ctx context.Context, req domain.WebhookRequest, token string) {
+	ctx = context.WithoutCancel(ctx)
+	go func() {
+		select {
+		case s.notifySem <- struct{}{}:
+			defer func() { <-s.notifySem }()
+			s.sendNotifications(ctx, req, token)
+		default:
+			slog.Warn("notification queue full, dropping", "token", token)
+		}
+	}()
+}
+
+func (s *Hook) sendNotifications(ctx context.Context, req domain.WebhookRequest, token string) {
+	channels, err := s.repo.ListNotificationChannels(ctx, req.HookID)
+	if err != nil || len(channels) == 0 {
+		return
+	}
+
+	msg := fmt.Sprintf(
+		"📨 <b>New webhook</b>\nEndpoint: <code>/r/%s</code>\nMethod: <b>%s</b>\nPath: <code>%s</code>",
+		html.EscapeString(token), html.EscapeString(req.Method), html.EscapeString(req.Path),
+	)
+
+	var wg sync.WaitGroup
+	for _, ch := range channels {
+		if !ch.Enabled {
+			continue
+		}
+		wg.Add(1)
+		go func(ch domain.NotificationChannel) {
+			defer wg.Done()
+			if err := s.sender.Send(ctx, ch.Provider, ch.Config, msg); err != nil {
+				slog.Warn("notification failed", "provider", ch.Provider, "token", token, "err", err)
+			}
+		}(ch)
+	}
+	wg.Wait()
 }
 
 func defaultHookResponse() domain.HookResponse {
