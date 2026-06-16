@@ -65,7 +65,6 @@ func sendMessage(ctx context.Context, botToken, chatID, text, proxyURL string) e
 		}
 	}
 
-	// text already contains HTML from the caller (handler.go escapes user data before calling Send)
 	payload, err := json.Marshal(map[string]string{
 		"chat_id":    chatID,
 		"text":       text,

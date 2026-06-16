@@ -165,7 +165,11 @@ func (s *Hook) DispatchNotifications(ctx context.Context, req domain.WebhookRequ
 
 func (s *Hook) sendNotifications(ctx context.Context, req domain.WebhookRequest, token string) {
 	channels, err := s.repo.ListNotificationChannels(ctx, req.HookID)
-	if err != nil || len(channels) == 0 {
+	if err != nil {
+		slog.Warn("fetch notification channels", "hookID", req.HookID, "err", err)
+		return
+	}
+	if len(channels) == 0 {
 		return
 	}
 
