@@ -132,9 +132,10 @@ type handlers struct {
 func newHandlers(deps *dependencies) *handlers {
 	return &handlers{
 		hook: server.NewHook(&server.HookDeps{
-			Mux:     deps.mux,
-			Service: deps.services.hook,
-			Hub:     deps.infra.hub,
+			Mux:           deps.mux,
+			Service:       deps.services.hook,
+			Notifications: deps.services.hook,
+			Hub:           deps.infra.hub,
 			Opts: server.HookOptions{
 				BaseURL:     deps.cfg.BaseURL,
 				MaxBodySize: deps.cfg.MaxBodySize,
