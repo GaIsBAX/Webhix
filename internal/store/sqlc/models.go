@@ -17,6 +17,16 @@ type Hook struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 }
 
+type HookNotificationChannel struct {
+	ID        int64     `json:"id"`
+	HookID    int64     `json:"hook_id"`
+	Provider  string    `json:"provider"`
+	Config    string    `json:"config"`
+	Enabled   int64     `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type HookResponse struct {
 	ID         int64     `json:"id"`
 	HookID     int64     `json:"hook_id"`

@@ -10,6 +10,7 @@ import (
 	"github.com/GaIsBAX/Webhix/internal/config"
 	"github.com/GaIsBAX/Webhix/internal/core"
 	"github.com/GaIsBAX/Webhix/internal/hub"
+	"github.com/GaIsBAX/Webhix/internal/notify"
 	"github.com/GaIsBAX/Webhix/internal/repos"
 	"github.com/GaIsBAX/Webhix/internal/server"
 	"github.com/GaIsBAX/Webhix/internal/store"
@@ -38,7 +39,12 @@ func newDependencies(ctx context.Context, cfg *config.Config) (*dependencies, er
 	}
 
 	repos := newRepositories(infra.db)
-	services := newServices(repos)
+
+	notifyRegistry := notify.NewRegistry(map[string]notify.Provider{
+		"telegram": notify.NewTelegramProvider(),
+	})
+
+	services := newServices(repos, notifyRegistry)
 
 	deps.mux = mux
 	deps.cfg = cfg
@@ -46,7 +52,7 @@ func newDependencies(ctx context.Context, cfg *config.Config) (*dependencies, er
 	deps.infra = infra
 	deps.repos = repos
 	deps.services = services
-	deps.handlers = newHandlers(&deps)
+	deps.handlers = newHandlers(&deps, notifyRegistry)
 	deps.handlers.registerRoutes()
 
 	staticFS, err := fs.Sub(web.Static, "static")
@@ -63,10 +69,10 @@ type services struct {
 	serve *core.Serve
 }
 
-func newServices(repos *repositories) *services {
+func newServices(repos *repositories, sender core.NotificationSender) *services {
 	hook := core.NewHook(repos.hook, func() string {
 		return pkg.GeneratePrefixedString("ho")
-	})
+	}, sender)
 	serve := core.NewServe(repos.serve)
 
 	return &services{
@@ -129,12 +135,14 @@ type handlers struct {
 	hook *server.Hook
 }
 
-func newHandlers(deps *dependencies) *handlers {
+func newHandlers(deps *dependencies, registry *notify.Registry) *handlers {
 	return &handlers{
 		hook: server.NewHook(&server.HookDeps{
-			Mux:     deps.mux,
-			Service: deps.services.hook,
-			Hub:     deps.infra.hub,
+			Mux:           deps.mux,
+			Service:       deps.services.hook,
+			Notifications: deps.services.hook,
+			Registry:      registry,
+			Hub:           deps.infra.hub,
 			Opts: server.HookOptions{
 				BaseURL:     deps.cfg.BaseURL,
 				MaxBodySize: deps.cfg.MaxBodySize,

@@ -57,6 +57,30 @@ export async function saveHookResponse(token: string, data: HookResponse): Promi
   if (!json.success) throw new Error(json.error?.message || 'Failed to save');
 }
 
+export interface Notification {
+  telegramBotToken: string;
+  telegramChatId: string;
+  proxyUrl: string;
+}
+
+export async function fetchNotification(token: string): Promise<Notification> {
+  const response = await fetch(`/api/endpoints/${token}/notifications`);
+  const json = (await response.json()) as ApiResponse<Notification>;
+  if (!json.success || !json.body)
+    return { telegramBotToken: '', telegramChatId: '', proxyUrl: '' };
+  return json.body;
+}
+
+export async function saveNotification(token: string, data: Notification): Promise<void> {
+  const response = await fetch(`/api/endpoints/${token}/notifications`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const json = (await response.json()) as ApiResponse<unknown>;
+  if (!json.success) throw new Error(json.error?.message || 'Failed to save');
+}
+
 export function connectEvents(
   token: string,
   handlers: {

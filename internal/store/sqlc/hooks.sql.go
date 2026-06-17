@@ -92,6 +92,24 @@ func (q *Queries) CreateWebhookRequest(ctx context.Context, arg CreateWebhookReq
 	return i, err
 }
 
+const deleteNotificationChannel = `-- name: DeleteNotificationChannel :execrows
+DELETE FROM hook_notification_channels
+WHERE hook_id = ? AND provider = ?
+`
+
+type DeleteNotificationChannelParams struct {
+	HookID   int64  `json:"hook_id"`
+	Provider string `json:"provider"`
+}
+
+func (q *Queries) DeleteNotificationChannel(ctx context.Context, arg DeleteNotificationChannelParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteNotificationChannel, arg.HookID, arg.Provider)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteWebhookRequestsOlderThan = `-- name: DeleteWebhookRequestsOlderThan :execresult
 DELETE FROM webhook_requests
 WHERE received_at < datetime('now', ?)
@@ -153,10 +171,37 @@ func (q *Queries) GetHookResponseByHookID(ctx context.Context, hookID int64) (Ho
 	return i, err
 }
 
+const getNotificationChannel = `-- name: GetNotificationChannel :one
+SELECT id, hook_id, provider, config, enabled, created_at, updated_at
+FROM hook_notification_channels
+WHERE hook_id = ? AND provider = ?
+`
+
+type GetNotificationChannelParams struct {
+	HookID   int64  `json:"hook_id"`
+	Provider string `json:"provider"`
+}
+
+func (q *Queries) GetNotificationChannel(ctx context.Context, arg GetNotificationChannelParams) (HookNotificationChannel, error) {
+	row := q.db.QueryRowContext(ctx, getNotificationChannel, arg.HookID, arg.Provider)
+	var i HookNotificationChannel
+	err := row.Scan(
+		&i.ID,
+		&i.HookID,
+		&i.Provider,
+		&i.Config,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listHooks = `-- name: ListHooks :many
 SELECT id, token, name, created_at, updated_at
 FROM hooks
-ORDER BY created_at DESC`
+ORDER BY created_at DESC
+`
 
 func (q *Queries) ListHooks(ctx context.Context) ([]Hook, error) {
 	rows, err := q.db.QueryContext(ctx, listHooks)
@@ -171,6 +216,44 @@ func (q *Queries) ListHooks(ctx context.Context) ([]Hook, error) {
 			&i.ID,
 			&i.Token,
 			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listNotificationChannels = `-- name: ListNotificationChannels :many
+SELECT id, hook_id, provider, config, enabled, created_at, updated_at
+FROM hook_notification_channels
+WHERE hook_id = ?
+ORDER BY provider
+`
+
+func (q *Queries) ListNotificationChannels(ctx context.Context, hookID int64) ([]HookNotificationChannel, error) {
+	rows, err := q.db.QueryContext(ctx, listNotificationChannels, hookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []HookNotificationChannel
+	for rows.Next() {
+		var i HookNotificationChannel
+		if err := rows.Scan(
+			&i.ID,
+			&i.HookID,
+			&i.Provider,
+			&i.Config,
+			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -332,6 +415,37 @@ func (q *Queries) UpsertHookResponse(ctx context.Context, arg UpsertHookResponse
 		&i.StatusCode,
 		&i.Headers,
 		&i.Body,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertNotificationChannel = `-- name: UpsertNotificationChannel :one
+INSERT INTO hook_notification_channels (hook_id, provider, config)
+VALUES (?, ?, ?)
+ON CONFLICT (hook_id, provider) DO UPDATE SET
+    config     = excluded.config,
+    enabled    = 1,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING id, hook_id, provider, config, enabled, created_at, updated_at
+`
+
+type UpsertNotificationChannelParams struct {
+	HookID   int64  `json:"hook_id"`
+	Provider string `json:"provider"`
+	Config   string `json:"config"`
+}
+
+func (q *Queries) UpsertNotificationChannel(ctx context.Context, arg UpsertNotificationChannelParams) (HookNotificationChannel, error) {
+	row := q.db.QueryRowContext(ctx, upsertNotificationChannel, arg.HookID, arg.Provider, arg.Config)
+	var i HookNotificationChannel
+	err := row.Scan(
+		&i.ID,
+		&i.HookID,
+		&i.Provider,
+		&i.Config,
+		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

@@ -61,3 +61,13 @@ func (p UpsertHookResponseParams) Validate() error {
 	}
 	return nil
 }
+
+type NotificationChannel struct {
+	ID        int64
+	HookID    int64
+	Provider  string
+	Config    map[string]string
+	Enabled   bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}

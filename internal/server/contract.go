@@ -47,6 +47,12 @@ type HookResponseContract struct {
 	Body       string            `json:"body"`
 }
 
+type NotificationContract struct {
+	Provider string            `json:"provider"`
+	Config   map[string]string `json:"config"`
+	Redacted []string          `json:"redacted,omitempty"`
+}
+
 type SetHookResponseRequestContract struct {
 	StatusCode int               `json:"statusCode"`
 	Headers    map[string]string `json:"headers"`
@@ -121,4 +127,23 @@ func toWebhookRequestContract(req domain.WebhookRequest) WebhookRequestContract 
 		BodySize:    req.BodySize,
 		ReceivedAt:  req.ReceivedAt,
 	}
+}
+
+func toNotificationContract(ch domain.NotificationChannel, secretKeys []string) NotificationContract {
+	secretSet := make(map[string]bool, len(secretKeys))
+	for _, s := range secretKeys {
+		secretSet[s] = true
+	}
+
+	cfg := make(map[string]string, len(ch.Config))
+	var redacted []string
+	for k, v := range ch.Config {
+		if secretSet[k] && v != "" {
+			redacted = append(redacted, k)
+		} else {
+			cfg[k] = v
+		}
+	}
+
+	return NotificationContract{Provider: ch.Provider, Config: cfg, Redacted: redacted}
 }

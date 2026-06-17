@@ -12,6 +12,8 @@ import {
 import {
   fetchHookResponse,
   saveHookResponse,
+  fetchNotification,
+  saveNotification,
 } from '../../features/endpoint-session/api/endpoint-api';
 
 export function renderSelectedDetail(elements: Elements, state: AppState): void {
@@ -237,7 +239,57 @@ function createSettingsForm(token: string | null): HTMLDivElement {
   saveBtn.className = 'settings-save-btn';
   saveBtn.textContent = 'Save';
 
-  wrap.append(statusLabel, statusInput, headersLabel, headersInput, bodyLabel, bodyInput, saveBtn);
+  // Telegram notifications section
+  const divider = document.createElement('hr');
+  divider.className = 'settings-divider';
+
+  const tgTitle = document.createElement('h4');
+  tgTitle.className = 'settings-section-title';
+  tgTitle.textContent = 'Telegram Notifications';
+
+  const tgTokenLabel = document.createElement('label');
+  tgTokenLabel.textContent = 'Bot Token';
+  const tgTokenInput = document.createElement('input');
+  tgTokenInput.type = 'text';
+  tgTokenInput.className = 'settings-input';
+  tgTokenInput.placeholder = '123456:ABC-DEF...';
+
+  const tgChatLabel = document.createElement('label');
+  tgChatLabel.textContent = 'Chat ID';
+  const tgChatInput = document.createElement('input');
+  tgChatInput.type = 'text';
+  tgChatInput.className = 'settings-input';
+  tgChatInput.placeholder = '-1001234567890';
+
+  const tgProxyLabel = document.createElement('label');
+  tgProxyLabel.textContent = 'Proxy URL (optional)';
+  const tgProxyInput = document.createElement('input');
+  tgProxyInput.type = 'text';
+  tgProxyInput.className = 'settings-input';
+  tgProxyInput.placeholder = 'socks5://127.0.0.1:1080';
+
+  const tgSaveBtn = document.createElement('button');
+  tgSaveBtn.className = 'settings-save-btn';
+  tgSaveBtn.textContent = 'Save Notifications';
+
+  wrap.append(
+    statusLabel,
+    statusInput,
+    headersLabel,
+    headersInput,
+    bodyLabel,
+    bodyInput,
+    saveBtn,
+    divider,
+    tgTitle,
+    tgTokenLabel,
+    tgTokenInput,
+    tgChatLabel,
+    tgChatInput,
+    tgProxyLabel,
+    tgProxyInput,
+    tgSaveBtn,
+  );
 
   if (token) {
     void fetchHookResponse(token).then((resp) => {
@@ -246,6 +298,12 @@ function createSettingsForm(token: string | null): HTMLDivElement {
         ? JSON.stringify(resp.headers, null, 2)
         : '';
       bodyInput.value = resp.body || '';
+    });
+
+    void fetchNotification(token).then((n) => {
+      tgTokenInput.value = n.telegramBotToken;
+      tgChatInput.value = n.telegramChatId;
+      tgProxyInput.value = n.proxyUrl;
     });
 
     saveBtn.addEventListener('click', () => {
@@ -276,6 +334,26 @@ function createSettingsForm(token: string | null): HTMLDivElement {
         })
         .finally(() => {
           saveBtn.disabled = false;
+        });
+    });
+
+    tgSaveBtn.addEventListener('click', () => {
+      tgSaveBtn.disabled = true;
+      void saveNotification(token, {
+        telegramBotToken: tgTokenInput.value.trim(),
+        telegramChatId: tgChatInput.value.trim(),
+        proxyUrl: tgProxyInput.value.trim(),
+      })
+        .then(() => {
+          tgSaveBtn.textContent = 'Saved!';
+          setTimeout(() => (tgSaveBtn.textContent = 'Save Notifications'), 2000);
+        })
+        .catch(() => {
+          tgSaveBtn.textContent = 'Error';
+          setTimeout(() => (tgSaveBtn.textContent = 'Save Notifications'), 2000);
+        })
+        .finally(() => {
+          tgSaveBtn.disabled = false;
         });
     });
   }

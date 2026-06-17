@@ -75,3 +75,27 @@ ORDER BY created_at DESC;
 SELECT id, hook_id, status_code, headers, body, created_at, updated_at
 FROM hook_responses
 WHERE hook_id = ?;
+
+-- name: ListNotificationChannels :many
+SELECT id, hook_id, provider, config, enabled, created_at, updated_at
+FROM hook_notification_channels
+WHERE hook_id = ?
+ORDER BY provider;
+
+-- name: GetNotificationChannel :one
+SELECT id, hook_id, provider, config, enabled, created_at, updated_at
+FROM hook_notification_channels
+WHERE hook_id = ? AND provider = ?;
+
+-- name: UpsertNotificationChannel :one
+INSERT INTO hook_notification_channels (hook_id, provider, config)
+VALUES (?, ?, ?)
+ON CONFLICT (hook_id, provider) DO UPDATE SET
+    config     = excluded.config,
+    enabled    = 1,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING id, hook_id, provider, config, enabled, created_at, updated_at;
+
+-- name: DeleteNotificationChannel :execrows
+DELETE FROM hook_notification_channels
+WHERE hook_id = ? AND provider = ?;

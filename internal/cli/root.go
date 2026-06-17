@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/GaIsBAX/Webhix/internal/cli/forward"
+	"github.com/GaIsBAX/Webhix/internal/cli/notify"
 	"github.com/GaIsBAX/Webhix/internal/cli/serve"
 	"github.com/GaIsBAX/Webhix/internal/cli/tunnel"
 	"github.com/GaIsBAX/Webhix/internal/cli/version"
@@ -29,6 +30,7 @@ func NewRootCommand(
 
 	cmd.AddCommand(serve.NewCommand(ctx, cfg, serveFactory))
 	cmd.AddCommand(forward.NewCommand(ctx, cfg))
+	cmd.AddCommand(notify.NewCommand(ctx, cfg))
 	cmd.AddCommand(tunnel.NewCommand(ctx, cfg))
 	cmd.AddCommand(version.NewCommand(ctx))
 
